@@ -1,0 +1,63 @@
+name: ARMv7 Candidate Test
+
+# Throwaway fork-only test of Dockerfile.candidate; never open a PR with this file.
+on:
+  workflow_dispatch:
+
+jobs:
+
+  armv7-build-and-import:
+    name: armv7 - build candidate, then import cv2/numpy/PIL inside it
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+
+      - name: Check Out Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build armv7 candidate
+        shell: bash
+        run: |
+          time docker buildx build --progress=plain --platform linux/arm/v7 --file ./Dockerfile.candidate --build-arg BRANCH_NAME=armv7-test --load --tag overlay-reset-armv7-test . 2>&1 | tee build.log
+          echo "RESULT piwheels downloads: $(grep -c 'piwheels.org' build.log || true)"
+          echo "RESULT source builds: $(grep -c 'Building wheel for' build.log || true)"
+          grep -E 'Building wheel for' build.log || echo "RESULT no wheels were built from source"
+
+      - name: Import check inside the armv7 image
+        shell: bash
+        run: |
+          docker run --rm --platform linux/arm/v7 --entrypoint python3 overlay-reset-armv7-test -c "import cv2, numpy, PIL, plexapi, requests, tmdbapis, kometautils; print('RESULT imports ok: cv2', cv2.__version__, '| numpy', numpy.__version__, '| PIL', PIL.__version__)"
+
+  amd64-arm64-regression:
+    name: amd64 + arm64 - candidate still builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+
+      - name: Check Out Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build amd64 and arm64
+        shell: bash
+        run: |
+          time docker buildx build --progress=plain --platform linux/amd64,linux/arm64 --file ./Dockerfile.candidate --build-arg BRANCH_NAME=armv7-test .
