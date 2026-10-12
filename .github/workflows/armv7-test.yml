@@ -33,6 +33,12 @@ jobs:
           echo "RESULT source builds: $(grep -c 'Building wheel for' build.log || true)"
           grep -E 'Building wheel for' build.log || echo "RESULT no wheels were built from source"
 
+      - name: Report every missing shared library in the armv7 image
+        if: always()
+        shell: bash
+        run: |
+          docker run --rm --platform linux/arm/v7 --entrypoint sh overlay-reset-armv7-test -c 'find /usr/local/lib/python3.13/site-packages -name "*.so*" -type f | while read f; do ldd "$f" 2>/dev/null | grep "not found" | sed "s|^|$f: |"; done | sed "s|.*/site-packages/||" | sort | uniq | head -50; echo "RESULT ldd scan done"'
+
       - name: Import check inside the armv7 image
         shell: bash
         run: |
